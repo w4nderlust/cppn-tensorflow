@@ -56,13 +56,13 @@ class CPPN():
   def init(self):
 
     # Initializing the tensor flow variables
-    init = tf.initialize_all_variables()
+    init = tf.global_variables_initializer()
     # Launch the session
     self.sess = tf.Session()
     self.sess.run(init)
 
   def reinit(self):
-    init = tf.initialize_variables(tf.trainable_variables())
+    init = tf.variables_initializer(tf.trainable_variables())
     self.sess.run(init)
 
   def _coordinates(self, x_dim = 32, y_dim = 32, scale = 1.0):
