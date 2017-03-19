@@ -9,7 +9,7 @@ See my blog post at [blog.otoro.net](http://blog.otoro.net/2016/03/25/generating
 ![Morphing](https://cdn.rawgit.com/hardmaru/cppn-tensorflow/master/examples/cppn.gif)
 ![Morphing](https://cdn.rawgit.com/hardmaru/cppn-tensorflow/master/examples/output.gif)
 
-I tested the implementation on TensorFlow 0.60 and 0.70.
+TensorFlow 1.0.0+ required.
 
 Used images2gif.py written by Almar Klein, Ant1, Marius van Voorden.
 
