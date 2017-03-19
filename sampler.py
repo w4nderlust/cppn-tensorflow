@@ -127,11 +127,11 @@ class Sampler():
             filename += ".gif"
         imageio.mimsave(filename, images, duration=durations)
 
-    def save_anim_mp4(self, z1, z2, filename, n_frame=10, fps=10, x_dim=512, y_dim=512, scale=10.0, reverse=True):
+    def save_anim_mp4(self, z1, z2, filename, n_frame=10, fps=10, x_dim=512, y_dim=512, scale=10.0):
         '''
-        this saves an animated gif from two latent states z1 and z2
+        this saves an animated mp4 from two latent states z1 and z2
         n_frame: number of states in between z1 and z2 morphing effect, exclusive of z1 and z2
-        duration1, duration2, control how long z1 and z2 are shown.  duration controls frame speed, in seconds
+        fps: number of frames displayed in a second
         '''
         delta_z = (z2 - z1) / (n_frame + 1)
         total_frames = n_frame + 2
