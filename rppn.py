@@ -14,7 +14,7 @@ import tensorflow as tf
 from ops import *
 
 
-class CPPN():
+class RPPN():
     def __init__(self, batch_size=1, z_dim=32, c_dim=1, scale=8.0, net_size=32):
         """
         Args:
@@ -48,6 +48,8 @@ class CPPN():
         self.x = tf.placeholder(tf.float32, [self.batch_size, None, 1])
         self.y = tf.placeholder(tf.float32, [self.batch_size, None, 1])
         self.r = tf.placeholder(tf.float32, [self.batch_size, None, 1])
+        # input for number of repetitions
+        self.k = tf.placeholder(tf.int32)
 
         # builds the generator network
         self.G = self.generator(x_dim=self.x_dim, y_dim=self.y_dim)
@@ -70,11 +72,15 @@ class CPPN():
         calculates and returns a vector of x and y coordintes, and corresponding radius from the centre of image.
         '''
         n_points = x_dim * y_dim
-        x_range = scale * (np.arange(x_dim) - (x_dim - 1) / 2.0) / (x_dim - 1) / 0.5
-        y_range = scale * (np.arange(y_dim) - (y_dim - 1) / 2.0) / (y_dim - 1) / 0.5
+        # creates x and y ranges of x/y_dim numbers from -scale to +scale
+        x_range = scale * ((np.arange(x_dim) - (x_dim - 1) / 2.0) / (x_dim - 1) * 2)
+        y_range = scale * ((np.arange(y_dim) - (y_dim - 1) / 2.0) / (y_dim - 1) * 2)
+        # create all r distances from center for any combination of coordinates on x and y
         x_mat = np.matmul(np.ones((y_dim, 1)), x_range.reshape((1, x_dim)))
         y_mat = np.matmul(y_range.reshape((y_dim, 1)), np.ones((1, x_dim)))
         r_mat = np.sqrt(x_mat * x_mat + y_mat * y_mat)
+        # transform the x x y matrices tiling as many of them as the batch size
+        # and reshaping to obtain a èbatch_size, x*y, 1+ tensor
         x_mat = np.tile(x_mat.flatten(), self.batch_size).reshape(self.batch_size, n_points, 1)
         y_mat = np.tile(y_mat.flatten(), self.batch_size).reshape(self.batch_size, n_points, 1)
         r_mat = np.tile(r_mat.flatten(), self.batch_size).reshape(self.batch_size, n_points, 1)
@@ -100,74 +106,31 @@ class CPPN():
             fully_connected(y_unroll, net_size, 'g_0_y', with_bias=False) + \
             fully_connected(r_unroll, net_size, 'g_0_r', with_bias=False)
 
-        '''
-        Below are a bunch of examples of different CPPN configurations.
-        Feel free to comment out and experiment!
-        '''
-
-        ###
-        ### Example: 3 layers of tanh() layers, with net_size = 32 activations/layer
-        ###
-        # '''
         H = tf.nn.tanh(U)
-        for i in range(3):
-            H = tf.nn.tanh(fully_connected(H, net_size, 'g_tanh_' + str(i)))
+
+        i = tf.constant(0)
+
+        def condition(i, k, H):
+            return tf.less(i, k)
+
+        def body(i, k, H):
+            i = tf.add(i, 1)
+            H = tf.nn.tanh(fully_connected(H, net_size, 'g_tanh'))
+            return i, k, H
+
+        i, k, H = tf.while_loop(condition, body, [i, self.k, H])
+
         output = tf.sigmoid(fully_connected(H, self.c_dim, 'g_final'))
-        # '''
-
-        ###
-        ### Similar to example above, but instead the output is
-        ### a weird function rather than just the sigmoid
-        '''
-        H = tf.nn.tanh(U)
-        for i in range(3):
-          H = tf.nn.tanh(fully_connected(H, net_size, 'g_tanh_'+str(i)))
-        output = tf.sqrt(1.0-tf.abs(tf.tanh(fully_connected(H, self.c_dim, 'g_final'))))
-        '''
-
-        ###
-        ### Example: mixing softplus and tanh layers, with net_size = 32 activations/layer
-        ###
-        '''
-        H = tf.nn.tanh(U)
-        H = tf.nn.softplus(fully_connected(H, net_size, 'g_softplus_1'))
-        H = tf.nn.tanh(fully_connected(H, net_size, 'g_tanh_2'))
-        H = tf.nn.softplus(fully_connected(H, net_size, 'g_softplus_2'))
-        H = tf.nn.tanh(fully_connected(H, net_size, 'g_tanh_2'))
-        H = tf.nn.softplus(fully_connected(H, net_size, 'g_softplus_2'))
-        output = tf.sigmoid(fully_connected(H, self.c_dim, 'g_final'))
-        '''
-
-        ###
-        ### Example: mixing sinusoids, tanh and multiple softplus layers
-        ###
-        '''
-        H = tf.nn.tanh(U)
-        H = tf.nn.softplus(fully_connected(H, net_size, 'g_softplus_1'))
-        H = tf.nn.tanh(fully_connected(H, net_size, 'g_tanh_2'))
-        H = tf.nn.softplus(fully_connected(H, net_size, 'g_softplus_2'))
-        output = 0.5 * tf.sin(fully_connected(H, self.c_dim, 'g_final')) + 0.5
-        '''
-
-        ###
-        ### Example: residual network of 4 tanh() layers
-        ###
-        '''
-        H = tf.nn.tanh(U)
-        for i in range(3):
-          H = H+tf.nn.tanh(fully_connected(H, net_size, g_tanh_'+str(i)))
-        output = tf.sigmoid(fully_connected(H, self.c_dim, 'g_final'))
-        '''
 
         '''
-        The final hidden later is pass thru a fully connected sigmoid later, so outputs -> (0, 1)
-        Also, the output has a dimention of c_dim, so can be monotone or RGB
+        The final hidden later is pass through a fully connected sigmoid later, so outputs -> (0, 1)
+        Also, the output has a dimension of c_dim, so can be monotone or RGB
         '''
         result = tf.reshape(output, [self.batch_size, y_dim, x_dim, self.c_dim])
 
         return result
 
-    def generate(self, z=None, x_dim=26, y_dim=26, scale=8.0):
+    def generate(self, z=None, x_dim=26, y_dim=26, scale=8.0, k=3, **kwargs):
         """ Generate data by sampling from latent space.
         If z is not None, data for this point in latent space is
         generated. Otherwise, z is drawn from prior in latent
@@ -180,7 +143,7 @@ class CPPN():
 
         G = self.generator(x_dim=x_dim, y_dim=y_dim, reuse=True)
         x_vec, y_vec, r_vec = self._coordinates(x_dim, y_dim, scale=scale)
-        image = self.sess.run(G, feed_dict={self.z: z, self.x: x_vec, self.y: y_vec, self.r: r_vec})
+        image = self.sess.run(G, feed_dict={self.z: z, self.x: x_vec, self.y: y_vec, self.r: r_vec, self.k: k})
         return image
 
     def close(self):
