@@ -15,7 +15,7 @@ from ops import *
 
 
 class RPPN():
-    def __init__(self, batch_size=1, z_dim=32, c_dim=1, scale=8.0, net_size=32):
+    def __init__(self, batch_size=1, z_dim=32, c_dim=1, scale=8.0, net_size=32, act='tanh', **kwargs):
         """
         Args:
         z_dim: how many dimensions of the latent space vector (R^z_dim)
@@ -26,6 +26,7 @@ class RPPN():
         """
         self.batch_size = batch_size
         self.net_size = net_size
+        self.act = act
         x_dim = 256
         y_dim = 256
         self.x_dim = x_dim
@@ -52,7 +53,7 @@ class RPPN():
         self.k = tf.placeholder(tf.int32)
 
         # builds the generator network
-        self.G = self.generator(x_dim=self.x_dim, y_dim=self.y_dim)
+        self.G = self.generator(x_dim=self.x_dim, y_dim=self.y_dim, act=act)
 
         self.init()
 
@@ -86,9 +87,13 @@ class RPPN():
         r_mat = np.tile(r_mat.flatten(), self.batch_size).reshape(self.batch_size, n_points, 1)
         return x_mat, y_mat, r_mat
 
-    def generator(self, x_dim, y_dim, reuse=False):
+    def generator(self, x_dim, y_dim, act='tanh', reuse=False):
         if reuse:
             tf.get_variable_scope().reuse_variables()
+
+        if not hasattr(tf.nn, act):
+            print("No activation {} available, using default tanh".format(act))
+            act = 'tanh'
 
         net_size = self.net_size
         n_points = x_dim * y_dim
@@ -115,7 +120,7 @@ class RPPN():
 
         def body(i, k, H):
             i = tf.add(i, 1)
-            H = tf.nn.tanh(fully_connected(H, net_size, 'g_tanh'))
+            H = getattr(tf.nn, act)(fully_connected(H, net_size, 'g_act'))
             return i, k, H
 
         i, k, H = tf.while_loop(condition, body, [i, self.k, H])
@@ -130,7 +135,7 @@ class RPPN():
 
         return result
 
-    def generate(self, z=None, x_dim=26, y_dim=26, scale=8.0, k=3, **kwargs):
+    def generate(self, z=None, x_dim=26, y_dim=26, scale=8.0, k=3, act=None, **kwargs):
         """ Generate data by sampling from latent space.
         If z is not None, data for this point in latent space is
         generated. Otherwise, z is drawn from prior in latent
@@ -141,7 +146,13 @@ class RPPN():
         # Note: This maps to mean of distribution, we could alternatively
         # sample from Gaussian distribution
 
-        G = self.generator(x_dim=x_dim, y_dim=y_dim, reuse=True)
+        if act is None:
+            if self.act is not None:
+                act = self.act
+            else:
+                act = 'tanh'
+
+        G = self.generator(x_dim=x_dim, y_dim=y_dim, act=act, reuse=True)
         x_vec, y_vec, r_vec = self._coordinates(x_dim, y_dim, scale=scale)
         image = self.sess.run(G, feed_dict={self.z: z, self.x: x_vec, self.y: y_vec, self.r: r_vec, self.k: k})
         return image

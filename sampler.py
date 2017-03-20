@@ -45,11 +45,11 @@ except NameError:
 
 
 class Sampler():
-    def __init__(self, model_type='CPPN', z_dim=8, c_dim=1, scale=10.0, net_size=32):
+    def __init__(self, model_type='CPPN', z_dim=8, c_dim=1, scale=10.0, net_size=32, act='tanh'):
         if model_type.lower() == 'cppn':
             self.model = CPPN(z_dim=z_dim, c_dim=c_dim, scale=scale, net_size=net_size)
         elif model_type.lower() == 'rppn':
-            self.model = RPPN(z_dim=z_dim, c_dim=c_dim, scale=scale, net_size=net_size)
+            self.model = RPPN(z_dim=z_dim, c_dim=c_dim, scale=scale, net_size=net_size, act=act)
         else:
             self.model = CPPN(z_dim=z_dim, c_dim=c_dim, scale=scale, net_size=net_size)
         self.z = self.generate_z()  # saves most recent z here, in case we find a nice image and want the z-vec
@@ -61,13 +61,13 @@ class Sampler():
         z = np.random.uniform(-1.0, 1.0, size=(1, self.model.z_dim)).astype(np.float32)
         return z
 
-    def generate(self, z=None, x_dim=1080, y_dim=1060, scale=10.0, k=3):
+    def generate(self, z=None, x_dim=1080, y_dim=1060, scale=10.0, k=3, act=None):
         if z is None:
             z = self.generate_z()
         else:
             z = np.reshape(z, (1, self.model.z_dim))
         self.z = z
-        return self.model.generate(z, x_dim, y_dim, scale, k=k)[0]
+        return self.model.generate(z, x_dim, y_dim, scale, k=k, act=act)[0]
 
     def show_image(self, image_data):
         '''
@@ -107,8 +107,8 @@ class Sampler():
             filename += ".png"
         self.to_image(image_data).save(filename)
 
-    def save_anim_gif(self, z1, z2, filename, n_frame=10, duration1=0.5, \
-                      duration2=1.0, duration=0.1, x_dim=512, y_dim=512, scale=10.0, k1=3, k2=3, reverse=True):
+    def save_anim_gif(self, z1, z2, filename, n_frame=10, duration1=0.5, duration2=1.0, duration=0.1, x_dim=512,
+                      y_dim=512, scale=10.0, k1=3, k2=3, act=None, reverse=True):
         '''
         this saves an animated gif from two latent states z1 and z2
         n_frame: number of states in between z1 and z2 morphing effect, exclusive of z1 and z2
@@ -121,7 +121,7 @@ class Sampler():
         for i in range(total_frames):
             z = z1 + delta_z * float(i)
             k = int(k1 + delta_k * float(i))
-            images.append(self.to_np_image(self.generate(z, x_dim, y_dim, scale, k=k)))
+            images.append(self.to_np_image(self.generate(z, x_dim, y_dim, scale, k=k, act=act)))
             print("processing image ", i)
         durations = [duration1] + [duration] * n_frame + [duration2]
         if reverse == True:  # go backwards in time back to the first state
@@ -135,7 +135,8 @@ class Sampler():
             filename += ".gif"
         imageio.mimsave(filename, images, duration=durations)
 
-    def save_anim_mp4(self, z1, z2, filename, n_frame=10, fps=10, x_dim=512, y_dim=512, scale=10.0, k1=3, k2=3, reverse=True):
+    def save_anim_mp4(self, z1, z2, filename, n_frame=10, fps=10, x_dim=512, y_dim=512, scale=10.0, k1=3, k2=3,
+                      act=None, reverse=True):
         '''
         this saves an animated mp4 from two latent states z1 and z2
         n_frame: number of states in between z1 and z2 morphing effect, exclusive of z1 and z2
@@ -148,7 +149,7 @@ class Sampler():
         for i in range(total_frames):
             z = z1 + delta_z * float(i)
             k = int(k1 + delta_k * float(i))
-            images.append(self.to_np_image(self.generate(z, x_dim, y_dim, scale, k=k)))
+            images.append(self.to_np_image(self.generate(z, x_dim, y_dim, scale, k=k, act=act)))
             print("processing image ", i)
         if reverse == True:  # go backwards in time back to the first state
             revImages = list(images)

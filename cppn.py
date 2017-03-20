@@ -15,7 +15,7 @@ from ops import *
 
 
 class CPPN():
-    def __init__(self, batch_size=1, z_dim=32, c_dim=1, scale=8.0, net_size=32):
+    def __init__(self, batch_size=1, z_dim=32, c_dim=1, scale=8.0, net_size=32, **kwargs):
         """
         Args:
         z_dim: how many dimensions of the latent space vector (R^z_dim)
