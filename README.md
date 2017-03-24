@@ -17,9 +17,12 @@ See Otoro's blog post at [blog.otoro.net](http://blog.otoro.net/2016/03/25/gener
 See my blogpost at [w4nderlu.st](http://www.w4nderlu.st/projects/rppn) for details on RPPN.
 
 My contribution:
-- porting to Python 3 and Tensorflow 1.0
-- video generation
 - added a new model, RPPN (Recursive Pattern Producing Network)
+- added a generalized activation function strategy
+- added layer norm normalization
+- added cosine similary as an alternative linear layer
+- porting to Python 3 and TensorFlow 1.0
+- mp4 video generation
 
 Requirements:
 - TensorFlow 1.0.0+
