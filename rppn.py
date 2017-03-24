@@ -12,7 +12,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import numpy as np
 import tensorflow as tf
 from ops import *
-
+import math
 
 class RPPN():
     def __init__(self, batch_size=1, z_dim=32, c_dim=1, scale=8.0, net_size=32, act='tanh', **kwargs):
@@ -106,26 +106,29 @@ class RPPN():
         y_unroll = tf.reshape(self.y, [self.batch_size * n_points, 1])
         r_unroll = tf.reshape(self.r, [self.batch_size * n_points, 1])
 
-        U = fully_connected(z_unroll, net_size, 'g_0_z') + \
-            fully_connected(x_unroll, net_size, 'g_0_x', with_bias=False) + \
-            fully_connected(y_unroll, net_size, 'g_0_y', with_bias=False) + \
-            fully_connected(r_unroll, net_size, 'g_0_r', with_bias=False)
+        sum_input = fully_connected(z_unroll, net_size, 'g_0_z') + \
+                    fully_connected(x_unroll, net_size, 'g_0_x', with_bias=False) + \
+                    fully_connected(y_unroll, net_size, 'g_0_y', with_bias=False) + \
+                    fully_connected(r_unroll, net_size, 'g_0_r', with_bias=False)
 
-        H = tf.nn.tanh(U)
+        hidden = tf.nn.tanh(sum_input)
 
         i = tf.constant(0)
+        zero = tf.constant(0)
 
         def condition(i, k, H):
             return tf.less(i, k)
 
         def body(i, k, H):
+            hidden = tf.cond(tf.equal(i, zero), 
+                lambda: single_iteration(H, net_size, act, reuse=False), 
+                lambda: single_iteration(H, net_size, act, reuse=True))
             i = tf.add(i, 1)
-            H = getattr(tf.nn, act)(fully_connected(H, net_size, 'g_act'))
-            return i, k, H
+            return i, k, hidden
 
-        i, k, H = tf.while_loop(condition, body, [i, self.k, H])
+        i, k, hidden = tf.while_loop(condition, body, [i, self.k, hidden])
 
-        output = tf.sigmoid(fully_connected(H, self.c_dim, 'g_final'))
+        output = tf.sigmoid(fully_connected(hidden, self.c_dim, 'g_final'))
 
         '''
         The final hidden later is pass through a fully connected sigmoid later, so outputs -> (0, 1)
@@ -134,6 +137,7 @@ class RPPN():
         result = tf.reshape(output, [self.batch_size, y_dim, x_dim, self.c_dim])
 
         return result
+
 
     def generate(self, z=None, x_dim=26, y_dim=26, scale=8.0, k=3, act=None, **kwargs):
         """ Generate data by sampling from latent space.
@@ -159,3 +163,26 @@ class RPPN():
 
     def close(self):
         self.sess.close()
+
+
+def single_iteration(H, net_size, act='tanh', reuse=False):
+    with tf.variable_scope("iter_norm", reuse=reuse):
+        H = tf.contrib.layers.layer_norm(H)
+    with tf.variable_scope("iter_linear", reuse=reuse):
+        #H = fully_connected(H, net_size)
+        H = cos_sim(H, net_size)
+    H = getattr(tf.nn, act)(H)
+    return H
+
+
+def cos_sim(x, net_size, name=None):
+    with tf.name_scope(name):
+        weights = tf.get_variable("weights", [net_size, net_size],
+            initializer=tf.random_normal_initializer())
+        biases = tf.get_variable("biases", [net_size],
+            initializer=tf.constant_initializer(0.001))
+        wat = 0.001
+        w_norm = tf.sqrt(tf.reduce_sum(weights**2, axis=0, keep_dims=True) + biases**2)
+        x_norm = tf.sqrt(tf.reduce_sum(x**2, axis=1, keep_dims=True) + wat**2)
+        cos_sim = (tf.matmul(x, weights) + wat * biases) / w_norm / x_norm
+        return cos_sim

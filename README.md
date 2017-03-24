@@ -28,6 +28,4 @@ Requirements:
 
 # License
 
-BSD - images2gif.py
-
-MIT - everything else
+MIT
